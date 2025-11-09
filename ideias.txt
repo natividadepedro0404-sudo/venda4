@@ -1,0 +1,5 @@
+quero que:
+
+1- no painel de admin, tenha um botão para adicionar cupons
+2- de para adicionar os produtos aos favoritos
+3- quando a pessoa comprar, sera diminuido o estoque do produto de acordo com a quantidade que a pessoa comprou
