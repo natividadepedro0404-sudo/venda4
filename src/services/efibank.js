@@ -27,42 +27,73 @@ class EfibankService {
   /**
    * Cria um agente HTTPS com certificado (se disponível)
    * Para certificados .p12, precisamos usar o módulo https do Node.js
+   * 
+   * Suporta duas formas de carregar o certificado:
+   * 1. Via caminho de arquivo (desenvolvimento/local)
+   * 2. Via variável de ambiente base64 (Vercel/serverless)
    */
   getHttpsAgent() {
-    if (!this.certificatePath) {
+    let p12Buffer = null;
+
+    // Tentar carregar certificado via variável de ambiente (base64) - para Vercel/serverless
+    const certBase64 = process.env.EFIBANK_CERTIFICATE_BASE64;
+    if (certBase64) {
+      try {
+        console.log('[Efí Bank] Carregando certificado via variável de ambiente (base64)');
+        p12Buffer = Buffer.from(certBase64, 'base64');
+        console.log(`[Efí Bank] ✓ Certificado carregado da variável de ambiente (${p12Buffer.length} bytes)`);
+      } catch (error) {
+        console.error('[Efí Bank] ERRO ao decodificar certificado base64:', error.message);
+        return null;
+      }
+    }
+    // Tentar carregar certificado via caminho de arquivo (desenvolvimento/local)
+    else if (this.certificatePath) {
+      try {
+        // Normalizar caminho (resolver caminhos relativos)
+        // Remover barra inicial se for caminho relativo do Windows
+        let certPath = this.certificatePath.replace(/^\\/, ''); // Remove \ inicial
+        
+        if (!path.isAbsolute(certPath)) {
+          certPath = path.resolve(process.cwd(), certPath);
+        }
+        
+        console.log(`[Efí Bank] Tentando carregar certificado de: ${certPath}`);
+        console.log(`[Efí Bank] Caminho original: ${this.certificatePath}`);
+        console.log(`[Efí Bank] Diretório atual: ${process.cwd()}`);
+        
+        if (!fs.existsSync(certPath)) {
+          console.error(`[Efí Bank] ERRO: Certificado não encontrado em: ${certPath}`);
+          console.error(`[Efí Bank] Verifique se o caminho está correto no arquivo .env`);
+          console.error(`[Efí Bank] Para Vercel/serverless, use EFIBANK_CERTIFICATE_BASE64 em vez de EFIBANK_CERTIFICATE_PATH`);
+          return null;
+        }
+
+        // Verificar se é um arquivo válido
+        const stats = fs.statSync(certPath);
+        console.log(`[Efí Bank] Certificado encontrado! Tamanho: ${stats.size} bytes`);
+
+        // Ler o certificado .p12
+        p12Buffer = fs.readFileSync(certPath);
+        console.log(`[Efí Bank] Certificado lido com sucesso (${p12Buffer.length} bytes)`);
+      } catch (error) {
+        console.error('[Efí Bank] ERRO ao carregar certificado:', error.message);
+        console.error('[Efí Bank] Stack:', error.stack);
+        console.error('[Efí Bank] Certifique-se de que:');
+        console.error('  1. O caminho está correto no arquivo .env');
+        console.error('  2. O arquivo é um certificado .p12 válido');
+        console.error('  3. O certificado não está corrompido');
+        console.error('  4. Para Vercel/serverless, use EFIBANK_CERTIFICATE_BASE64');
+        return null;
+      }
+    } else {
       console.log('[Efí Bank] Certificado não configurado');
+      console.log('[Efí Bank] Para produção, configure EFIBANK_CERTIFICATE_BASE64 (Vercel) ou EFIBANK_CERTIFICATE_PATH (local)');
       return null; // Sem certificado, usar fetch padrão
     }
 
+    // Criar agente HTTPS com certificado
     try {
-      // Normalizar caminho (resolver caminhos relativos)
-      // Remover barra inicial se for caminho relativo do Windows
-      let certPath = this.certificatePath.replace(/^\\/, ''); // Remove \ inicial
-      
-      if (!path.isAbsolute(certPath)) {
-        certPath = path.resolve(process.cwd(), certPath);
-      }
-      
-      console.log(`[Efí Bank] Tentando carregar certificado de: ${certPath}`);
-      console.log(`[Efí Bank] Caminho original: ${this.certificatePath}`);
-      console.log(`[Efí Bank] Diretório atual: ${process.cwd()}`);
-      
-      if (!fs.existsSync(certPath)) {
-        console.error(`[Efí Bank] ERRO: Certificado não encontrado em: ${certPath}`);
-        console.error(`[Efí Bank] Verifique se o caminho está correto no arquivo .env`);
-        return null;
-      }
-
-      // Verificar se é um arquivo válido
-      const stats = fs.statSync(certPath);
-      console.log(`[Efí Bank] Certificado encontrado! Tamanho: ${stats.size} bytes`);
-
-      // Ler o certificado .p12
-      const p12Buffer = fs.readFileSync(certPath);
-      console.log(`[Efí Bank] Certificado lido com sucesso (${p12Buffer.length} bytes)`);
-      
-      // Criar agente HTTPS com certificado
-      // Para .p12, precisamos usar a opção pfx
       const agentOptions = {
         pfx: p12Buffer,
         passphrase: this.certificatePassword || ''
@@ -72,12 +103,7 @@ class EfibankService {
       console.log(`[Efí Bank] ✓ Agente HTTPS criado com certificado`);
       return agent;
     } catch (error) {
-      console.error('[Efí Bank] ERRO ao carregar certificado:', error.message);
-      console.error('[Efí Bank] Stack:', error.stack);
-      console.error('[Efí Bank] Certifique-se de que:');
-      console.error('  1. O caminho está correto no arquivo .env');
-      console.error('  2. O arquivo é um certificado .p12 válido');
-      console.error('  3. O certificado não está corrompido');
+      console.error('[Efí Bank] ERRO ao criar agente HTTPS:', error.message);
       return null;
     }
   }
