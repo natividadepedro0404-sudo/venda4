@@ -34,6 +34,12 @@ app.use('/api/site-settings', siteSettingsRoutes);
 
 app.get('/api/ping', (req, res) => res.json({ ok: true, now: Date.now() }));
 
-app.listen(PORT, () => {
-  console.log(`Hypex server running on http://localhost:${PORT}`);
-});
+// Para Vercel, exportar o app como handler
+// Para desenvolvimento local, iniciar o servidor normalmente
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, () => {
+    console.log(`Hypex server running on http://localhost:${PORT}`);
+  });
+}
